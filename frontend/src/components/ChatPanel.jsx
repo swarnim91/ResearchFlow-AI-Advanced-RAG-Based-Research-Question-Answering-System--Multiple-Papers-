@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, Search, BookOpen, Lightbulb } from 'lucide-react';
 import CitedPapers from './CitedPapers';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = '';
 
 const SUGGESTIONS = [
   'What are the key findings?',

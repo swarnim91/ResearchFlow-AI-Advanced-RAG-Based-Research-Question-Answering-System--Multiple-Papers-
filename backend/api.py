@@ -25,7 +25,7 @@ app = FastAPI(title="ResearchFlow AI API")
 # CORS — allow the React dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -138,7 +138,7 @@ async def upload_papers(files: List[UploadFile] = File(...)):
                 vectorstore = create_vector_store(docs)
                 successful_count += 1
             else:
-                from langchain.text_splitter import RecursiveCharacterTextSplitter
+                from langchain_text_splitters import RecursiveCharacterTextSplitter
 
                 text_splitter = RecursiveCharacterTextSplitter(
                     chunk_size=500, chunk_overlap=100

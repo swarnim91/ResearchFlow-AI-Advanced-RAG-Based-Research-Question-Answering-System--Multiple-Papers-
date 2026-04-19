@@ -3,7 +3,7 @@ import Header from './components/Header';
 import UploadZone from './components/UploadZone';
 import ChatPanel from './components/ChatPanel';
 
-const API_BASE = 'http://127.0.0.1:8000';
+const API_BASE = '';
 
 export default function App() {
   const [files, setFiles] = useState([]);
@@ -89,6 +89,11 @@ export default function App() {
           {toast.message}
         </div>
       )}
+
+      {/* Footer */}
+      <footer className="app-footer">
+        Designed by <span className="footer-name">Swarnim Sugandh</span> &copy; {new Date().getFullYear()}
+      </footer>
     </div>
   );
 }

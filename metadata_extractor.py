@@ -8,7 +8,7 @@ from config import METADATA_DIR, GROQ_API_KEY, MODEL_NAME
 class DocumentMetadata(BaseModel):
     title: str = Field(description="The title of the academic paper.")
     authors: str = Field(description="The authors of the paper. Use comma-separated names.")
-    year: int = Field(description="The publication year of the paper as a 4-digit integer. If unknown, use 0.")
+    year: str = Field(description="The publication year of the paper. If unknown, use 'Unknown'.")
     summary: str = Field(description="A 1-2 sentence brief summary of the paper.")
     keywords: str = Field(description="Comma-separated keywords related to the paper.")
 
@@ -52,7 +52,7 @@ def extract_metadata(pdf_path):
         return {
             'title': filename,
             'authors': 'Unknown',
-            'year': 0,
+            'year': 'Unknown',
             'summary': 'Extraction failed.',
             'keywords': '',
             'filename': filename

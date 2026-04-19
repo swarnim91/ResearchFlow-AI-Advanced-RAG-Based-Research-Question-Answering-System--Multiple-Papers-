@@ -1,11 +1,16 @@
 import React from 'react';
+import logoImg from '../assets/logo.png';
 
 export default function Header({ indexed, paperCount }) {
   return (
     <header className="header">
       <div className="header-inner">
         <div className="header-brand">
-          <div className="header-logo">🔬</div>
+          <img
+            src={logoImg}
+            alt="ResearchFlow AI Logo"
+            className="header-logo-img"
+          />
           <div>
             <div className="header-title">ResearchFlow AI</div>
             <div className="header-subtitle">Intelligent Research Paper Analysis</div>

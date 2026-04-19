@@ -1,6 +1,6 @@
 import os
 from langchain_community.document_loaders import PyPDFLoader
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
@@ -106,13 +106,14 @@ def create_synthesis_chain(vectorstore):
         temperature=0
     )
 
-    template = """You are a strict research assistant.
+    template = """You are a highly analytical research assistant.
 
-Use ONLY the provided context to answer.
-If the answer is not present, say: "Not found in provided papers."
+Use ONLY the provided context to answer. If the answer is not present, say: "Not found in provided papers."
 
-First, provide a brief "Summary:" paragraph that summarizes the explicit answer to the question based on the context.
-Then, under a new section "Details:", provide the detailed explanation.
+Format your response systematically using Markdown:
+- **Summary**: A bolded, concise 1-2 sentence core answer.
+- **Key Details**: Use bullet points to list the critical facts, methodologies, or findings.
+- **Synthesis**: A brief concluding paragraph tying the details together.
 
 Context:
 {context}
@@ -141,7 +142,7 @@ Answer:"""
         AttributeInfo(
             name="year",
             description="The publication year of the paper",
-            type="integer",
+            type="string",
         ),
         AttributeInfo(
             name="summary",

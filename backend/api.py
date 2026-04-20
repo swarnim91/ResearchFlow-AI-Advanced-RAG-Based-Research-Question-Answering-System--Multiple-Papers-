@@ -3,9 +3,6 @@ import sys
 import shutil
 import uuid
 
-# Add parent directory to path so we can import main, config, etc.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -22,10 +19,10 @@ from config import PAPERS_DIR, VECTOR_DB_DIR, METADATA_DIR
 
 app = FastAPI(title="ResearchFlow AI API")
 
-# CORS — allow the React dev server
+# CORS — allow the React dev server and remote hosts
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -117,15 +117,56 @@ def get_status():
     )
 
 
-@app.post("/api/upload")
-async def upload_papers(files: List[UploadFile] = File(...)):
-    """Upload PDFs, index them into ChromaDB."""
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, BackgroundTasks
+
+# ... (keep other imports, jumping to upload_papers) ...
+
+def process_papers_background(file_paths: List[str]):
+    """Background task to heavily process PDFs and create embeddings."""
     global _qa_chain
-    
-    _qa_chain = None
     import gc
+    
+    vectorstore = None
+    successful_count = 0
+    errors = []
+    
+    for file_path in file_paths:
+        try:
+            docs = load_paper_with_metadata(file_path, "uploaded")
+            if not docs:
+                errors.append(f"{os.path.basename(file_path)}: No content extracted")
+                continue
+            if vectorstore is None:
+                vectorstore = create_vector_store(docs)
+                successful_count += 1
+            else:
+                from langchain_text_splitters import RecursiveCharacterTextSplitter
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=500, chunk_overlap=100
+                )
+                chunks = text_splitter.split_documents(docs)
+                if chunks:
+                    import uuid
+                    ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
+                    vectorstore.add_documents(chunks, ids=ids)
+                    try:
+                        vectorstore.persist()
+                    except Exception:
+                        pass
+                successful_count += 1
+        except Exception as e:
+            errors.append(f"{os.path.basename(file_path)}: {str(e)}")
+            print(f"Failed to process {file_path}: {e}")
+            
+    # Always reload QA chain after processing
+    _qa_chain = None
+    _get_qa_chain(force_reload=True)
     gc.collect()
 
+
+@app.post("/api/upload")
+async def upload_papers(background_tasks: BackgroundTasks, files: List[UploadFile] = File(...)):
+    """Upload PDFs, and queue them for indexing into ChromaDB."""
     os.makedirs(PAPERS_DIR, exist_ok=True)
 
     # Clean old data
@@ -144,7 +185,7 @@ async def upload_papers(files: List[UploadFile] = File(...)):
                 except Exception:
                     pass
 
-    # Save uploaded files
+    # Save uploaded files quickly
     file_paths = []
     for f in files:
         path = os.path.join(PAPERS_DIR, f.filename)
@@ -153,54 +194,14 @@ async def upload_papers(files: List[UploadFile] = File(...)):
             dst.write(content)
         file_paths.append(path)
 
-    # Index papers
-    vectorstore = None
-    successful_count = 0
-    errors = []
-    for file_path in file_paths:
-        try:
-            docs = load_paper_with_metadata(file_path, "uploaded")
-            if not docs:
-                errors.append(f"{os.path.basename(file_path)}: No content extracted")
-                continue
-            if vectorstore is None:
-                vectorstore = create_vector_store(docs)
-                successful_count += 1
-            else:
-                from langchain_text_splitters import RecursiveCharacterTextSplitter
+    # Hand off heavy processing to background
+    background_tasks.add_task(process_papers_background, file_paths)
 
-                text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=500, chunk_overlap=100
-                )
-                chunks = text_splitter.split_documents(docs)
-                if chunks:
-                    ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
-                    vectorstore.add_documents(chunks, ids=ids)
-                    try:
-                        vectorstore.persist()
-                    except Exception:
-                        pass
-                successful_count += 1
-        except Exception as e:
-            error_msg = f"{os.path.basename(file_path)}: {str(e)}"
-            print(f"Failed to process {file_path}: {e}")
-            errors.append(error_msg)
-
-    if successful_count == 0:
-        detail = "Failed to parse any of the provided documents."
-        if errors:
-            detail += " Errors: " + "; ".join(errors[:3])
-        raise HTTPException(status_code=400, detail=detail)
-
-    # Reload QA chain
-    _qa_chain = None
-    _get_qa_chain(force_reload=True)
-
-    response = {"message": "Papers indexed successfully", "count": successful_count}
-    if errors:
-        response["warnings"] = errors
-
-    return response
+    return {
+        "message": "Files uploaded successfully. Processing started in the background.",
+        "count": len(files),
+        "background": True
+    }
 
 
 @app.post("/api/ask", response_model=AskResponse)

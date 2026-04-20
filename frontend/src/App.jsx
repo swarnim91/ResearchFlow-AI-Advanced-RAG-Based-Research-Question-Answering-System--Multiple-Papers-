@@ -141,13 +141,25 @@ export default function App() {
         throw new Error(`Invalid JSON response from server. The server may be under heavy load.`);
       }
 
-      showToast(`${data.count} paper${data.count !== 1 ? 's' : ''} indexed successfully!`);
-      setIndexed(true);
-      setPaperCount(data.count);
+      showToast(`Upload complete. Processing ${data.count} paper${data.count !== 1 ? 's' : ''} in the background. This may take a few minutes.`, 'success');
+      
       setFiles([]);
       setBackendConnected(true);
+      
+      // Start polling for status since it's processing in the background
+      let pollCount = 0;
+      const pollInterval = setInterval(async () => {
+        pollCount++;
+        const isReady = await checkStatus(0);
+        if (isReady || pollCount > 60) { // Stop polling after 5 minutes (60 * 5s)
+          clearInterval(pollInterval);
+          if (isReady) {
+            showToast('Processing complete! Papers are now indexed and ready.', 'success');
+          }
+        }
+      }, 5000);
 
-      // Auto-close sidebar on mobile after successful processing
+      // Auto-close sidebar on mobile after successful upload
       if (isMobileRef.current) {
         setSidebarOpen(false);
       }

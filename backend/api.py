@@ -2,9 +2,11 @@ import os
 import sys
 import shutil
 import uuid
+import traceback
 
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List
 
@@ -19,14 +21,31 @@ from config import PAPERS_DIR, VECTOR_DB_DIR, METADATA_DIR
 
 app = FastAPI(title="ResearchFlow AI API")
 
-# CORS — allow the React dev server and remote hosts
+# CORS — allow the React dev server and any remote hosts
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=86400,
 )
+
+
+# ---------------------------------------------------------------------------
+# Global exception handler — ensures all errors return valid JSON
+# ---------------------------------------------------------------------------
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """Catch-all handler to prevent raw HTML error pages and ensure JSON responses."""
+    print(f"Unhandled exception: {exc}")
+    traceback.print_exc()
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"Internal server error: {str(exc)}"},
+    )
+
 
 # ---------------------------------------------------------------------------
 # In-memory state
@@ -75,6 +94,13 @@ class StatusResponse(BaseModel):
 @app.get("/")
 def read_root():
     return {"status": "ResearchFlow Backend is up and running!"}
+
+
+@app.get("/api/health")
+def health_check():
+    """Simple health check for connectivity testing."""
+    return {"status": "ok"}
+
 
 @app.get("/api/status", response_model=StatusResponse)
 def get_status():
@@ -130,10 +156,12 @@ async def upload_papers(files: List[UploadFile] = File(...)):
     # Index papers
     vectorstore = None
     successful_count = 0
+    errors = []
     for file_path in file_paths:
         try:
             docs = load_paper_with_metadata(file_path, "uploaded")
             if not docs:
+                errors.append(f"{os.path.basename(file_path)}: No content extracted")
                 continue
             if vectorstore is None:
                 vectorstore = create_vector_store(docs)
@@ -151,16 +179,25 @@ async def upload_papers(files: List[UploadFile] = File(...)):
                     vectorstore.persist()
                 successful_count += 1
         except Exception as e:
+            error_msg = f"{os.path.basename(file_path)}: {str(e)}"
             print(f"Failed to process {file_path}: {e}")
+            errors.append(error_msg)
 
     if successful_count == 0:
-        raise HTTPException(status_code=400, detail="Failed to parse any of the provided documents.")
+        detail = "Failed to parse any of the provided documents."
+        if errors:
+            detail += " Errors: " + "; ".join(errors[:3])
+        raise HTTPException(status_code=400, detail=detail)
 
     # Reload QA chain
     _qa_chain = None
     _get_qa_chain(force_reload=True)
 
-    return {"message": "Papers indexed successfully", "count": successful_count}
+    response = {"message": "Papers indexed successfully", "count": successful_count}
+    if errors:
+        response["warnings"] = errors
+
+    return response
 
 
 @app.post("/api/ask", response_model=AskResponse)

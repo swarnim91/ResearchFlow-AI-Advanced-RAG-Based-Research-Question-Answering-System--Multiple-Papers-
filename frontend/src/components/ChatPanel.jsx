@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { Send, Sparkles, Search, BookOpen, Lightbulb } from 'lucide-react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
+import { Send, Sparkles, Lightbulb } from 'lucide-react';
 import CitedPapers from './CitedPapers';
 
 const API_BASE = import.meta.env.VITE_API_URL || '';
@@ -26,6 +26,27 @@ export default function ChatPanel({ indexed }) {
     scrollToBottom();
   }, [messages, loading]);
 
+  // Robust fetch with timeout
+  const fetchWithTimeout = useCallback(async (url, options = {}, timeoutMs = 60000) => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+      return response;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        throw new Error('The request timed out. The server may be processing a complex query — please try again.');
+      }
+      throw new Error('Unable to reach the server. Please check your connection and try again.');
+    }
+  }, []);
+
   const sendQuestion = async (question) => {
     const q = question || input.trim();
     if (!q || loading) return;
@@ -36,40 +57,42 @@ export default function ChatPanel({ indexed }) {
     setLoading(true);
 
     try {
-      const res = await fetch(`${API_BASE}/api/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ question: q }),
-      });
+      const res = await fetchWithTimeout(
+        `${API_BASE}/api/ask`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question: q }),
+        },
+        120000 // 2 minute timeout for AI responses
+      );
 
       let data;
-      try {
-        if (!res.ok) {
-          let errorMsg = `Error (Status: ${res.status})`;
-          try {
-            const text = await res.text();
-            try {
-              const json = JSON.parse(text);
-              if (json.detail) errorMsg = json.detail;
-            } catch {
-              if (text.includes('<html')) {
-                errorMsg = `Server Error (${res.status}): The backend might be overloaded.`;
-              } else if (text) {
-                errorMsg = text;
-              }
-            }
-          } catch (e) {}
-          throw new Error(errorMsg);
-        }
-
-        const textData = await res.text();
+      if (!res.ok) {
+        let errorMsg = `Error (Status: ${res.status})`;
         try {
-          data = JSON.parse(textData);
-        } catch (e) {
-          throw new Error(`Invalid response from server: ${textData.substring(0, 50)}...`);
+          const text = await res.text();
+          try {
+            const json = JSON.parse(text);
+            if (json.detail) errorMsg = json.detail;
+          } catch {
+            if (text.includes('<html') || text.includes('<HTML')) {
+              errorMsg = `Server Error (${res.status}): The backend might be overloaded. Try again in a moment.`;
+            } else if (text) {
+              errorMsg = text.substring(0, 200);
+            }
+          }
+        } catch {
+          // Couldn't read response body
         }
-      } catch (err) {
-        throw new Error(err.message || 'Something went wrong');
+        throw new Error(errorMsg);
+      }
+
+      const textData = await res.text();
+      try {
+        data = JSON.parse(textData);
+      } catch {
+        throw new Error('Received an invalid response from the server. Please try again.');
       }
 
       setMessages((prev) => [

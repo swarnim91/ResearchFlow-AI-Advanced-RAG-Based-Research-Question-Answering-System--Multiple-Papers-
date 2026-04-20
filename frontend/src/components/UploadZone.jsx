@@ -16,6 +16,7 @@ export default function UploadZone({
   onProcess,
   processing,
   indexed,
+  mobileHidden,
 }) {
   const onDrop = useCallback(
     (acceptedFiles) => {
@@ -40,7 +41,7 @@ export default function UploadZone({
   };
 
   return (
-    <div className="sidebar">
+    <div className={`sidebar ${mobileHidden ? 'mobile-hidden' : ''}`}>
       {/* Section title */}
       <p className="sidebar-section-title">Upload Papers</p>
 

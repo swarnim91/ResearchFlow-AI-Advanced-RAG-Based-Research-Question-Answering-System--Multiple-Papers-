@@ -22,8 +22,8 @@ app = FastAPI(title="ResearchFlow AI API")
 # CORS — allow the React dev server and remote hosts
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://researchflow-frontend-m1eq.onrender.com"],
-    allow_credentials=True,
+    allow_origins=["*"],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

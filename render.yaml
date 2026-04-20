@@ -30,4 +30,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://researchflow-backend.onrender.com
+        value: https://researchflow-backend-zssy.onrender.com

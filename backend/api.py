@@ -176,7 +176,10 @@ async def upload_papers(files: List[UploadFile] = File(...)):
                 if chunks:
                     ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
                     vectorstore.add_documents(chunks, ids=ids)
-                    vectorstore.persist()
+                    try:
+                        vectorstore.persist()
+                    except Exception:
+                        pass
                 successful_count += 1
         except Exception as e:
             error_msg = f"{os.path.basename(file_path)}: {str(e)}"

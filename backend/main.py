@@ -9,10 +9,6 @@ from langchain.prompts import PromptTemplate
 from metadata_extractor import extract_metadata, save_metadata
 from config import *
 import json
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import LLMChainExtractor
-from langchain.chains.query_constructor.base import AttributeInfo
-from langchain.retrievers.self_query.base import SelfQueryRetriever
 
 
 def load_paper_with_metadata(file_path, category):
@@ -54,7 +50,6 @@ def load_all_papers(base_dir):
     return all_documents
 
 def create_vector_store(documents):
-
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=500,
         chunk_overlap=100
@@ -72,14 +67,16 @@ def create_vector_store(documents):
         persist_directory=VECTOR_DB_DIR
     )
 
-    vectorstore.persist()
+    # persist() is auto in ChromaDB >=0.4, but call safely for compat
+    try:
+        vectorstore.persist()
+    except Exception:
+        pass
 
     return vectorstore
 
 def load_vector_store():
-
     if os.path.exists(VECTOR_DB_DIR) and os.listdir(VECTOR_DB_DIR):
-
         embeddings = HuggingFaceEmbeddings(
             model_name="all-MiniLM-L6-v2"
         )
@@ -103,7 +100,9 @@ def create_synthesis_chain(vectorstore):
     llm = ChatGroq(
         groq_api_key=GROQ_API_KEY,
         model_name=MODEL_NAME,
-        temperature=0
+        temperature=0,
+        request_timeout=60,
+        max_retries=2,
     )
 
     template = """You are a highly analytical research assistant.
@@ -128,58 +127,16 @@ Answer:"""
         input_variables=["context", "question"]
     )
 
-    metadata_field_info = [
-        AttributeInfo(
-            name="title",
-            description="The title of the paper",
-            type="string",
-        ),
-        AttributeInfo(
-            name="authors",
-            description="The authors of the paper",
-            type="string",
-        ),
-        AttributeInfo(
-            name="year",
-            description="The publication year of the paper",
-            type="string",
-        ),
-        AttributeInfo(
-            name="summary",
-            description="A brief summary of the paper",
-            type="string",
-        ),
-        AttributeInfo(
-            name="keywords",
-            description="Keywords related to the paper",
-            type="string",
-        ),
-        AttributeInfo(
-            name="category",
-            description="The category of the paper",
-            type="string",
-        ),
-        AttributeInfo(
-            name="filename",
-            description="The filename of the paper",
-            type="string",
-        ),
-    ]
-
-    document_content_description = "A section of an academic research paper"
-
-    base_retriever = SelfQueryRetriever.from_llm(
-        llm,
-        vectorstore,
-        document_content_description,
-        metadata_field_info,
-        verbose=True
+    # Use a simple similarity retriever — fast, reliable, no extra LLM calls
+    retriever = vectorstore.as_retriever(
+        search_type="similarity",
+        search_kwargs={"k": NUM_RETRIEVED_DOCS},
     )
 
     qa_chain = RetrievalQA.from_chain_type(
         llm=llm,
         chain_type="stuff",
-        retriever=base_retriever,
+        retriever=retriever,
         return_source_documents=True,
         chain_type_kwargs={"prompt": PROMPT}
     )

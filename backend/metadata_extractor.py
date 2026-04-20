@@ -30,7 +30,9 @@ def extract_metadata(pdf_path):
         llm = ChatGroq(
             groq_api_key=GROQ_API_KEY,
             model_name=MODEL_NAME,
-            temperature=0
+            temperature=0,
+            request_timeout=30,
+            max_retries=1,
         )
         
         structured_llm = llm.with_structured_output(DocumentMetadata)
@@ -49,11 +51,13 @@ def extract_metadata(pdf_path):
         }
     except Exception as e:
         print(f"Error extracting metadata with LLM for {filename}: {e}")
+        # Fallback: try to extract title from filename
+        title = os.path.splitext(filename)[0].replace('_', ' ').replace('-', ' ').title()
         return {
-            'title': filename,
+            'title': title,
             'authors': 'Unknown',
             'year': 'Unknown',
-            'summary': 'Extraction failed.',
+            'summary': 'Metadata extraction timed out or failed.',
             'keywords': '',
             'filename': filename
         }

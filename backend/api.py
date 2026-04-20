@@ -72,6 +72,10 @@ class StatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+@app.get("/")
+def read_root():
+    return {"status": "ResearchFlow Backend is up and running!"}
+
 @app.get("/api/status", response_model=StatusResponse)
 def get_status():
     """Return whether papers are indexed and list them."""

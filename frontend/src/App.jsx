@@ -3,7 +3,7 @@ import Header from './components/Header';
 import UploadZone from './components/UploadZone';
 import ChatPanel from './components/ChatPanel';
 
-const API_BASE = '';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 export default function App() {
   const [files, setFiles] = useState([]);
@@ -50,12 +50,36 @@ export default function App() {
         body: formData,
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Upload failed');
+      let data;
+      try {
+        if (!res.ok) {
+          let errorMsg = `Upload failed (Status: ${res.status})`;
+          try {
+            const text = await res.text();
+            try {
+              const json = JSON.parse(text);
+              if (json.detail) errorMsg = json.detail;
+            } catch {
+              if (text.includes('<html') || text.includes('<html')) {
+                errorMsg = `Server Error (${res.status}): The backend might be overloaded or timed out.`;
+              } else if (text) {
+                errorMsg = text;
+              }
+            }
+          } catch (e) {}
+          throw new Error(errorMsg);
+        }
+
+        const textData = await res.text();
+        try {
+          data = JSON.parse(textData);
+        } catch (e) {
+          throw new Error(`Invalid JSON response from server: ${textData.substring(0, 50)}...`);
+        }
+      } catch (err) {
+        throw new Error(err.message || 'Network error or bad response');
       }
 
-      const data = await res.json();
       showToast(`${data.count} paper${data.count !== 1 ? 's' : ''} indexed successfully!`);
       setIndexed(true);
       setPaperCount(data.count);

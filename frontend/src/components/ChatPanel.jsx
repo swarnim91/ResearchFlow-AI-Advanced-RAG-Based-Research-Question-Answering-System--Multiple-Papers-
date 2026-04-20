@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Sparkles, Search, BookOpen, Lightbulb } from 'lucide-react';
 import CitedPapers from './CitedPapers';
 
-const API_BASE = '';
+const API_BASE = import.meta.env.VITE_API_URL || '';
 
 const SUGGESTIONS = [
   'What are the key findings?',
@@ -42,12 +42,36 @@ export default function ChatPanel({ indexed }) {
         body: JSON.stringify({ question: q }),
       });
 
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Something went wrong');
+      let data;
+      try {
+        if (!res.ok) {
+          let errorMsg = `Error (Status: ${res.status})`;
+          try {
+            const text = await res.text();
+            try {
+              const json = JSON.parse(text);
+              if (json.detail) errorMsg = json.detail;
+            } catch {
+              if (text.includes('<html')) {
+                errorMsg = `Server Error (${res.status}): The backend might be overloaded.`;
+              } else if (text) {
+                errorMsg = text;
+              }
+            }
+          } catch (e) {}
+          throw new Error(errorMsg);
+        }
+
+        const textData = await res.text();
+        try {
+          data = JSON.parse(textData);
+        } catch (e) {
+          throw new Error(`Invalid response from server: ${textData.substring(0, 50)}...`);
+        }
+      } catch (err) {
+        throw new Error(err.message || 'Something went wrong');
       }
 
-      const data = await res.json();
       setMessages((prev) => [
         ...prev,
         {

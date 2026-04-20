@@ -5,20 +5,15 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
-    # Using a 1GB persistent disk to store PDFs and Vector DB
-    disk:
-      name: data
-      mountPath: /data
-      sizeGB: 1
     envVars:
       - key: GROQ_API_KEY
         sync: false # Set this in the Render Dashboard
       - key: PAPERS_DIR
-        value: /data/papers
+        value: ./data/papers
       - key: VECTOR_DB_DIR
-        value: /data/vector_db
+        value: ./data/vector_db
       - key: METADATA_DIR
-        value: /data/metadata
+        value: ./data/metadata
       - key: PYTHON_VERSION
         value: 3.11.0
 

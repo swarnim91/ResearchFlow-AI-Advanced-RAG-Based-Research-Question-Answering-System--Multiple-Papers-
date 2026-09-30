@@ -3,16 +3,15 @@
   command = "npm install && npm run build"
   publish = "dist"
 
+# Proxy all /api/* calls to the Render backend — eliminates CORS completely
 [[redirects]]
-  # Redirect API calls to the backend if you prefer using Netlify rewrites
-  # Replace the `to` URL with your actual deployed backend URL (e.g., on Render)
-  # from = "/api/*"
-  # to = "https://your-backend-url.onrender.com/api/:splat"
-  # status = 200
-  # force = true
+  from = "/api/*"
+  to = "https://researchflow-backend-zssy.onrender.com/api/:splat"
+  status = 200
+  force = true
 
+# Single Page Application (SPA) Fallback
 [[redirects]]
-  # Single Page Application (SPA) Fallback
   from = "/*"
   to = "/index.html"
   status = 200

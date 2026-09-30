@@ -51,7 +51,7 @@ export default function App() {
   // Check status on mount with retry
   const checkStatus = useCallback(async (retryCount = 0) => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/api/status`, {}, 15000);
+      const res = await fetchWithTimeout(`${API_BASE}/api/status`, {}, 90000);
       if (res.ok) {
         const data = await res.json();
         setIndexed(data.indexed);

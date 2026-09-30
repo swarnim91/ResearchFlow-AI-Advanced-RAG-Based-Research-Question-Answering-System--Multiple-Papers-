@@ -1,0 +1,18 @@
+[build]
+  base = "frontend"
+  command = "npm install && npm run build"
+  publish = "dist"
+
+[[redirects]]
+  # Redirect API calls to the backend if you prefer using Netlify rewrites
+  # Replace the `to` URL with your actual deployed backend URL (e.g., on Render)
+  # from = "/api/*"
+  # to = "https://your-backend-url.onrender.com/api/:splat"
+  # status = 200
+  # force = true
+
+[[redirects]]
+  # Single Page Application (SPA) Fallback
+  from = "/*"
+  to = "/index.html"
+  status = 200

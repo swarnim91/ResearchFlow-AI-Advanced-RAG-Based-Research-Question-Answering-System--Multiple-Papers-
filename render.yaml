@@ -1,23 +1,32 @@
 services:
+  # Unified Full-Stack Docker Deployment (Recommended for 1-click deployment)
+  - type: web
+    name: researchflow-ai-fullstack
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false # Set in Render Dashboard
+      - key: MODEL_NAME
+        value: openai/gpt-oss-20b
+
+  # Separate Python Backend Service
   - type: web
     name: researchflow-backend
     env: python
     plan: free
-    rootDir: backend
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn api:app --host 0.0.0.0 --port $PORT
+    startCommand: uvicorn backend.api:app --host 0.0.0.0 --port $PORT
     envVars:
       - key: GROQ_API_KEY
-        sync: false # Set this in the Render Dashboard
-      - key: PAPERS_DIR
-        value: ./data/papers
-      - key: VECTOR_DB_DIR
-        value: ./data/vector_db
-      - key: METADATA_DIR
-        value: ./data/metadata
+        sync: false
+      - key: MODEL_NAME
+        value: openai/gpt-oss-20b
       - key: PYTHON_VERSION
         value: 3.11.0
 
+  # Separate Static Frontend Service
   - type: web
     name: researchflow-frontend
     env: static
@@ -30,4 +39,7 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://researchflow-backend-zssy.onrender.com
+        fromService:
+          type: web
+          name: researchflow-backend
+          envVarKey: RENDER_EXTERNAL_URL

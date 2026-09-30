@@ -5,3 +5,6 @@ __pycache__/
 metadata/
 papers/
 vector_db/
+scratch/
+frontend/dist/
+

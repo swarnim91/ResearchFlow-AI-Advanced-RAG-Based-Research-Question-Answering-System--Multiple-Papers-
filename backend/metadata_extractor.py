@@ -1,5 +1,9 @@
 import os
+import sys
 import json
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from pypdf import PdfReader
 from pydantic import BaseModel, Field
 from langchain_groq import ChatGroq
@@ -22,7 +26,9 @@ def extract_metadata(pdf_path):
         num_pages = min(3, len(reader.pages))
         text_content = ""
         for i in range(num_pages):
-            text_content += reader.pages[i].extract_text() + "\n"
+            extracted = reader.pages[i].extract_text()
+            if extracted:
+                text_content += extracted + "\n"
             
         if not text_content.strip():
             text_content = f"Filename: {filename}. Content could not be extracted."
@@ -41,12 +47,18 @@ def extract_metadata(pdf_path):
         
         result = structured_llm.invoke(prompt)
         
+        # Safely handle dictionary or Pydantic model response
+        def _get_val(key, default):
+            if isinstance(result, dict):
+                return result.get(key, default)
+            return getattr(result, key, default)
+
         return {
-            'title': result.title,
-            'authors': result.authors,
-            'year': result.year,
-            'summary': result.summary,
-            'keywords': result.keywords,
+            'title': _get_val('title', os.path.splitext(filename)[0]),
+            'authors': _get_val('authors', 'Unknown'),
+            'year': str(_get_val('year', 'Unknown')),
+            'summary': _get_val('summary', ''),
+            'keywords': _get_val('keywords', ''),
             'filename': filename
         }
     except Exception as e:

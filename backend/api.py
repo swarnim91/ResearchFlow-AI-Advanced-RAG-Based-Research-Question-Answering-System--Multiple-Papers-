@@ -4,11 +4,15 @@ import shutil
 import uuid
 import traceback
 
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+# Ensure the backend directory is in sys.path so imports work regardless of working directory
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
 from typing import List
+from fastapi import FastAPI, UploadFile, File, HTTPException, Request, BackgroundTasks
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from main import (
     create_vector_store,
@@ -17,14 +21,14 @@ from main import (
     ask_question,
     load_paper_with_metadata,
 )
-from config import PAPERS_DIR, VECTOR_DB_DIR, METADATA_DIR
+from config import PAPERS_DIR, VECTOR_DB_DIR, METADATA_DIR, CHUNK_SIZE, CHUNK_OVERLAP
 
 app = FastAPI(title="ResearchFlow AI API")
 
-# CORS — allow the React dev server and any remote hosts
+# CORS — allow React dev server and remote hosts
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://researchflow-frontend-m1eq.onrender.com"],
+    allow_origins=["*"],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -89,17 +93,13 @@ class StatusResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Routes
+# API Routes
 # ---------------------------------------------------------------------------
-@app.get("/")
-def read_root():
-    return {"status": "ResearchFlow Backend is up and running!"}
-
-
+@app.get("/api")
 @app.get("/api/health")
 def health_check():
     """Simple health check for connectivity testing."""
-    return {"status": "ok"}
+    return {"status": "ok", "message": "ResearchFlow Backend is up and running!"}
 
 
 @app.get("/api/status", response_model=StatusResponse)
@@ -116,10 +116,6 @@ def get_status():
         papers=papers,
     )
 
-
-from fastapi import FastAPI, UploadFile, File, HTTPException, Request, BackgroundTasks
-
-# ... (keep other imports, jumping to upload_papers) ...
 
 def process_papers_background(file_paths: List[str]):
     """Background task to heavily process PDFs and create embeddings."""
@@ -142,11 +138,10 @@ def process_papers_background(file_paths: List[str]):
             else:
                 from langchain_text_splitters import RecursiveCharacterTextSplitter
                 text_splitter = RecursiveCharacterTextSplitter(
-                    chunk_size=500, chunk_overlap=100
+                    chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP
                 )
                 chunks = text_splitter.split_documents(docs)
                 if chunks:
-                    import uuid
                     ids = [str(uuid.uuid4()) for _ in range(len(chunks))]
                     vectorstore.add_documents(chunks, ids=ids)
                     try:
@@ -169,10 +164,13 @@ async def upload_papers(background_tasks: BackgroundTasks, files: List[UploadFil
     """Upload PDFs, and queue them for indexing into ChromaDB."""
     os.makedirs(PAPERS_DIR, exist_ok=True)
 
-    # Clean old data
+    # Clean old vector/metadata directories
     for d in [VECTOR_DB_DIR, METADATA_DIR]:
         if os.path.exists(d):
-            shutil.rmtree(d, ignore_errors=True)
+            try:
+                shutil.rmtree(d, ignore_errors=True)
+            except Exception as e:
+                print(f"Warning cleaning directory {d}: {e}")
         os.makedirs(d, exist_ok=True)
 
     # Clean papers not in the current upload set
@@ -222,3 +220,23 @@ def ask(req: QuestionRequest):
         answer=result["answer"],
         cited_papers=result["cited_papers"],
     )
+
+
+# ---------------------------------------------------------------------------
+# Serve Frontend Static Files (if frontend/dist exists)
+# Allows full-stack deployment on a single port/service
+# ---------------------------------------------------------------------------
+DIST_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend", "dist"))
+
+if os.path.exists(DIST_DIR):
+    app.mount("/assets", StaticFiles(directory=os.path.join(DIST_DIR, "assets")), name="static_assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        # Serve index.html for all non-api routes
+        if full_path.startswith("api"):
+            raise HTTPException(status_code=404, detail="API endpoint not found")
+        file_path = os.path.join(DIST_DIR, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(DIST_DIR, "index.html"))

@@ -5,7 +5,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_community.embeddings import HuggingFaceInferenceAPIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from langchain_groq import ChatGroq
@@ -53,6 +53,15 @@ def load_all_papers(base_dir):
     
     return all_documents
 
+def _get_embeddings():
+    """Return API-based embeddings — no local model loaded, minimal RAM usage."""
+    hf_token = os.environ.get("HF_API_TOKEN", "")  # Optional: set for higher rate limits
+    return HuggingFaceInferenceAPIEmbeddings(
+        api_key=hf_token if hf_token else "hf_dummy",  # Public models don't require a token
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+    )
+
+
 def create_vector_store(documents):
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=CHUNK_SIZE,
@@ -61,10 +70,7 @@ def create_vector_store(documents):
 
     chunks = text_splitter.split_documents(documents)
 
-    embeddings = HuggingFaceEmbeddings(
-        model_name="all-MiniLM-L6-v2",
-        model_kwargs={'device': 'cpu'}
-    )
+    embeddings = _get_embeddings()
 
     vectorstore = Chroma.from_documents(
         documents=chunks,
@@ -82,10 +88,7 @@ def create_vector_store(documents):
 
 def load_vector_store():
     if os.path.exists(VECTOR_DB_DIR) and os.listdir(VECTOR_DB_DIR):
-        embeddings = HuggingFaceEmbeddings(
-            model_name="all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'}
-        )
+        embeddings = _get_embeddings()
 
         return Chroma(
             persist_directory=VECTOR_DB_DIR,

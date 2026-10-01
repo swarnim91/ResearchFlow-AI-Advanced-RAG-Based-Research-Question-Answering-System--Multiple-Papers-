@@ -95,8 +95,12 @@ class StatusResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # API Routes
 # ---------------------------------------------------------------------------
+@app.get("/")
+@app.head("/")
 @app.get("/api")
+@app.head("/api")
 @app.get("/api/health")
+@app.head("/api/health")
 def health_check():
     """Simple health check for connectivity testing."""
     return {"status": "ok", "message": "ResearchFlow Backend is up and running!"}
@@ -122,16 +126,20 @@ def process_papers_background(file_paths: List[str]):
     global _qa_chain
     import gc
     
+    print(f"[BG] Starting background processing for {len(file_paths)} file(s)...")
     vectorstore = None
     successful_count = 0
     errors = []
     
     for file_path in file_paths:
         try:
+            print(f"[BG] Processing: {os.path.basename(file_path)}")
             docs = load_paper_with_metadata(file_path, "uploaded")
             if not docs:
                 errors.append(f"{os.path.basename(file_path)}: No content extracted")
+                print(f"[BG] WARNING: No content extracted from {os.path.basename(file_path)}")
                 continue
+            print(f"[BG] Extracted {len(docs)} page(s), creating embeddings...")
             if vectorstore is None:
                 vectorstore = create_vector_store(docs)
                 successful_count += 1
@@ -149,10 +157,16 @@ def process_papers_background(file_paths: List[str]):
                     except Exception:
                         pass
                 successful_count += 1
+            print(f"[BG] ✓ Successfully indexed {os.path.basename(file_path)}")
         except Exception as e:
             errors.append(f"{os.path.basename(file_path)}: {str(e)}")
-            print(f"Failed to process {file_path}: {e}")
+            print(f"[BG] ✗ Failed to process {file_path}: {e}")
+            traceback.print_exc()
             
+    print(f"[BG] Processing complete: {successful_count} succeeded, {len(errors)} failed")
+    if errors:
+        print(f"[BG] Errors: {errors}")
+    
     # Always reload QA chain after processing
     _qa_chain = None
     _get_qa_chain(force_reload=True)

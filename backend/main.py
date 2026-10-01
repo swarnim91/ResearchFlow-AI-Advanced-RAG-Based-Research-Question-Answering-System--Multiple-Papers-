@@ -56,10 +56,11 @@ def load_all_papers(base_dir):
 from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 def _get_embeddings():
-    """Return local FastEmbed embeddings to bypass Render's broken DNS for the HuggingFace API."""
+    """Return local FastEmbed embeddings with the smallest model to prevent Render OOM crashes."""
     return FastEmbedEmbeddings(
-        model_name="BAAI/bge-small-en-v1.5",
-        max_length=512
+        model_name="sentence-transformers/all-MiniLM-L6-v2",
+        max_length=512,
+        threads=1
     )
 
 

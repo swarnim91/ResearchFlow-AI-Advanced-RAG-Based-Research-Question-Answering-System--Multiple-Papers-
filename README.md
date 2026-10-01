@@ -1,3 +1,13 @@
+---
+title: ResearchFlow AI
+emoji: 🔬
+colorFrom: blue
+colorTo: purple
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # ResearchFlow AI 🔬
 
 **Advanced RAG-Based Academic Research & Question Answering System**

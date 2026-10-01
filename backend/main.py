@@ -53,63 +53,13 @@ def load_all_papers(base_dir):
     
     return all_documents
 
-import requests
-from typing import List
-from langchain_core.embeddings import Embeddings
-
-class CustomHFEmbeddings(Embeddings):
-    def __init__(self, api_key: str, model_name: str):
-        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model_name}"
-        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key and api_key != "hf_dummy" else {}
-        self.timeout = 30  # strict timeout
-
-    def _query(self, texts: List[str]) -> List[List[float]]:
-        import time
-        max_retries = 5
-        for attempt in range(max_retries):
-            try:
-                response = requests.post(self.api_url, headers=self.headers, json={"inputs": texts}, timeout=self.timeout)
-                if response.status_code == 200:
-                    return response.json()
-                
-                # If model is loading (503) or rate limited (429), wait and retry
-                if response.status_code in [503, 429]:
-                    error_data = response.json() if "application/json" in response.headers.get("Content-Type", "") else {}
-                    wait_time = error_data.get("estimated_time", 15)  # default to 15s if not provided
-                    wait_time = min(wait_time, 30) # cap wait time
-                    print(f"[BG] HF Model loading/busy. Waiting {wait_time}s before retry ({attempt+1}/{max_retries})...")
-                    time.sleep(wait_time)
-                    continue
-                    
-                # Other errors fail immediately
-                raise Exception(f"HF API Error {response.status_code}: {response.text}")
-                
-            except requests.exceptions.RequestException as e:
-                if attempt == max_retries - 1:
-                    raise Exception(f"HF API Network Error: {str(e)}")
-                print(f"[BG] Network error, retrying in 5s... ({attempt+1}/{max_retries})")
-                time.sleep(5)
-                
-        raise Exception("HF API failed after max retries due to model loading or rate limits.")
-
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        # Process in batches of 50 to avoid payload size limits
-        all_embeddings = []
-        batch_size = 50
-        for i in range(0, len(texts), batch_size):
-            batch = texts[i:i + batch_size]
-            all_embeddings.extend(self._query(batch))
-        return all_embeddings
-
-    def embed_query(self, text: str) -> List[float]:
-        return self._query([text])[0]
+from langchain_community.embeddings.fastembed import FastEmbedEmbeddings
 
 def _get_embeddings():
-    """Return API-based embeddings with a strict timeout to prevent hanging."""
-    hf_token = os.environ.get("HF_API_TOKEN", "")
-    return CustomHFEmbeddings(
-        api_key=hf_token,
-        model_name="sentence-transformers/all-MiniLM-L6-v2"
+    """Return local FastEmbed embeddings to bypass Render's broken DNS for the HuggingFace API."""
+    return FastEmbedEmbeddings(
+        model_name="BAAI/bge-small-en-v1.5",
+        max_length=512
     )
 
 

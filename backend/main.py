@@ -64,10 +64,33 @@ class CustomHFEmbeddings(Embeddings):
         self.timeout = 30  # strict timeout
 
     def _query(self, texts: List[str]) -> List[List[float]]:
-        response = requests.post(self.api_url, headers=self.headers, json={"inputs": texts}, timeout=self.timeout)
-        if response.status_code != 200:
-            raise Exception(f"HF API Error {response.status_code}: {response.text}")
-        return response.json()
+        import time
+        max_retries = 5
+        for attempt in range(max_retries):
+            try:
+                response = requests.post(self.api_url, headers=self.headers, json={"inputs": texts}, timeout=self.timeout)
+                if response.status_code == 200:
+                    return response.json()
+                
+                # If model is loading (503) or rate limited (429), wait and retry
+                if response.status_code in [503, 429]:
+                    error_data = response.json() if "application/json" in response.headers.get("Content-Type", "") else {}
+                    wait_time = error_data.get("estimated_time", 15)  # default to 15s if not provided
+                    wait_time = min(wait_time, 30) # cap wait time
+                    print(f"[BG] HF Model loading/busy. Waiting {wait_time}s before retry ({attempt+1}/{max_retries})...")
+                    time.sleep(wait_time)
+                    continue
+                    
+                # Other errors fail immediately
+                raise Exception(f"HF API Error {response.status_code}: {response.text}")
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == max_retries - 1:
+                    raise Exception(f"HF API Network Error: {str(e)}")
+                print(f"[BG] Network error, retrying in 5s... ({attempt+1}/{max_retries})")
+                time.sleep(5)
+                
+        raise Exception("HF API failed after max retries due to model loading or rate limits.")
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         # Process in batches of 50 to avoid payload size limits

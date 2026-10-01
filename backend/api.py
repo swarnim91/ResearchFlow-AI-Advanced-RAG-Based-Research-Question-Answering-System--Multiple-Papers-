@@ -55,7 +55,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 # In-memory state
 # ---------------------------------------------------------------------------
 _qa_chain = None
-
+_last_errors = []
 
 def _get_qa_chain(force_reload: bool = False):
     """Lazy-load the QA chain."""
@@ -67,30 +67,26 @@ def _get_qa_chain(force_reload: bool = False):
         _qa_chain = create_synthesis_chain(vs)
     return _qa_chain
 
-
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
 class QuestionRequest(BaseModel):
     question: str
 
-
 class PaperInfo(BaseModel):
     title: str
     authors: str
     year: str
 
-
 class AskResponse(BaseModel):
     answer: str
     cited_papers: dict
-
 
 class StatusResponse(BaseModel):
     indexed: bool
     paper_count: int
     papers: List[str]
-
+    errors: List[str] = []
 
 # ---------------------------------------------------------------------------
 # API Routes
@@ -105,10 +101,10 @@ def health_check():
     """Simple health check for connectivity testing."""
     return {"status": "ok", "message": "ResearchFlow Backend is up and running!"}
 
-
 @app.get("/api/status", response_model=StatusResponse)
 def get_status():
     """Return whether papers are indexed and list them."""
+    global _last_errors
     papers: List[str] = []
     if os.path.exists(PAPERS_DIR):
         papers = [f for f in os.listdir(PAPERS_DIR) if f.lower().endswith(".pdf")]
@@ -118,25 +114,25 @@ def get_status():
         indexed=vs is not None,
         paper_count=len(papers),
         papers=papers,
+        errors=_last_errors
     )
-
 
 def process_papers_background(file_paths: List[str]):
     """Background task to heavily process PDFs and create embeddings."""
-    global _qa_chain
+    global _qa_chain, _last_errors
     import gc
     
     print(f"[BG] Starting background processing for {len(file_paths)} file(s)...")
     vectorstore = None
     successful_count = 0
-    errors = []
+    _last_errors = []
     
     for file_path in file_paths:
         try:
             print(f"[BG] Processing: {os.path.basename(file_path)}")
             docs = load_paper_with_metadata(file_path, "uploaded")
             if not docs:
-                errors.append(f"{os.path.basename(file_path)}: No content extracted")
+                _last_errors.append(f"{os.path.basename(file_path)}: No content extracted")
                 print(f"[BG] WARNING: No content extracted from {os.path.basename(file_path)}")
                 continue
             print(f"[BG] Extracted {len(docs)} page(s), creating embeddings...")
@@ -159,13 +155,13 @@ def process_papers_background(file_paths: List[str]):
                 successful_count += 1
             print(f"[BG] ✓ Successfully indexed {os.path.basename(file_path)}")
         except Exception as e:
-            errors.append(f"{os.path.basename(file_path)}: {str(e)}")
+            _last_errors.append(f"{os.path.basename(file_path)}: {str(e)}")
             print(f"[BG] ✗ Failed to process {file_path}: {e}")
             traceback.print_exc()
             
-    print(f"[BG] Processing complete: {successful_count} succeeded, {len(errors)} failed")
-    if errors:
-        print(f"[BG] Errors: {errors}")
+    print(f"[BG] Processing complete: {successful_count} succeeded, {len(_last_errors)} failed")
+    if _last_errors:
+        print(f"[BG] Errors: {_last_errors}")
     
     # Always reload QA chain after processing
     _qa_chain = None

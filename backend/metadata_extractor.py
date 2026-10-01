@@ -37,8 +37,8 @@ def extract_metadata(pdf_path):
             groq_api_key=GROQ_API_KEY,
             model_name=MODEL_NAME,
             temperature=0,
-            request_timeout=30,
-            max_retries=1,
+            request_timeout=60,
+            max_retries=3,
         )
         
         structured_llm = llm.with_structured_output(DocumentMetadata)

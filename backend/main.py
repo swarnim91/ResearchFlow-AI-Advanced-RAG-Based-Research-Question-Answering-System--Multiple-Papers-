@@ -53,12 +53,40 @@ def load_all_papers(base_dir):
     
     return all_documents
 
+import requests
+from typing import List
+from langchain_core.embeddings import Embeddings
+
+class CustomHFEmbeddings(Embeddings):
+    def __init__(self, api_key: str, model_name: str):
+        self.api_url = f"https://api-inference.huggingface.co/pipeline/feature-extraction/{model_name}"
+        self.headers = {"Authorization": f"Bearer {api_key}"} if api_key and api_key != "hf_dummy" else {}
+        self.timeout = 30  # strict timeout
+
+    def _query(self, texts: List[str]) -> List[List[float]]:
+        response = requests.post(self.api_url, headers=self.headers, json={"inputs": texts}, timeout=self.timeout)
+        if response.status_code != 200:
+            raise Exception(f"HF API Error {response.status_code}: {response.text}")
+        return response.json()
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        # Process in batches of 50 to avoid payload size limits
+        all_embeddings = []
+        batch_size = 50
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i:i + batch_size]
+            all_embeddings.extend(self._query(batch))
+        return all_embeddings
+
+    def embed_query(self, text: str) -> List[float]:
+        return self._query([text])[0]
+
 def _get_embeddings():
-    """Return API-based embeddings — no local model loaded, minimal RAM usage."""
-    hf_token = os.environ.get("HF_API_TOKEN", "")  # Optional: set for higher rate limits
-    return HuggingFaceInferenceAPIEmbeddings(
-        api_key=hf_token if hf_token else "hf_dummy",  # Public models don't require a token
-        model_name="sentence-transformers/all-MiniLM-L6-v2",
+    """Return API-based embeddings with a strict timeout to prevent hanging."""
+    hf_token = os.environ.get("HF_API_TOKEN", "")
+    return CustomHFEmbeddings(
+        api_key=hf_token,
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
     )
 
 
